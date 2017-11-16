@@ -1,4 +1,3 @@
-//getSystemInfoLinux.sh//
 #!/bin/sh
 # Written by Braum at 20171019
 # Last Modified by Braum at 20170109
@@ -11,7 +10,7 @@ hn=`uname -n`
 echo "hostname : $hn"
 mf=`prtconf | grep -i 'Processor Type'`
 mfsn=`prtconf -|grep 'Serial Number'`
-cpuname= `uname -M` 
+cpuname=`uname -M` 
 echo "CPU : $cpuname "
 os=`oslevel`
 echo "OSver. : $os"
@@ -39,3 +38,5 @@ wget -O giipAPISYS.txt "$APIURL"
 
 # Clean up =========================================
 rm -f giipAPISYS.txt
+getSystemInfoAIX.sh.txt
+
