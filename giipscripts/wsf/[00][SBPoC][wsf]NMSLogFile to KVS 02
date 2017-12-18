@@ -1,0 +1,208 @@
+<job id= "NMSFiletoKVS.v1.22">
+<script language= "VBScript">
+'----------------------------------
+'Authorized by Lowy at 20160805
+'v1.1 (160805)
+'----------------------------------
+'----------------------------------
+'Initialize
+On Error Resume Next
+
+'### System Variables
+at = "{{sk}}"
+lsSn = "{{lssn}}"
+strComputer = "."
+Set objWMIServie = GetObject("winmugmts:\\" & strComputer & "\root\CIMV2")
+Set oWshShell = CreateObject("WScript.Shell")
+lwPath = oWshShell.CurrentDirectory
+
+'### 0. User variables
+factor = "NMSData"
+lwLogFileLast = "giipWinEvNum.log"
+
+'### 1. Get log File
+Dim lwFso,sAbsFileName, DT, sDT
+lwTmpFileName = "tmpScript." & lwScrType
+sAbsFileName = "D:\NMS\NMS.txt"
+lwTextSetLog = lwTmpFileName
+lwBatTmp = lwPath & "\lwTmpScriptExec.bat"
+
+Set lwFso = WScript.CreateObject("Scripting.FileSystemObject")
+
+'1.1.get last date
+sLogDateLast = lwfEvNumGet(lwPath, lwLogFileLast)
+'msgbox sLogDateLast
+
+lwi = 0
+
+if lwFso.fileexists(sAbsFileName)
+  set lwFileNMS = lwFso.opentextfile(sAbsFileName)
+  
+  Do while not lwFileNMS.AtEndOfStream and lwi < 500
+    s = lwFileNMS.ReadLine
+    
+    skw = "수집시간"
+    skwe = "/장비명:"
+    sPos = instr(s, skw)
+    if sPos > 0 then
+      sPos2 = instr(sPos, s, skwe)
+      sLogTime = mid(s, sPos + len(skw) + 1, sPos2 -sPos - len(skw) -1)
+    end if
+    
+    
+    skw = "/포트:"
+    skwe = "/대역폭:"
+    sPos = instr(s, skw)
+    if sPos > 0 then
+      sPos2 = instr(sPos, s, skwe)
+      sLogTime = mid(s, sPos + len(skw), sPos2 -sPos - len(skw))
+    end if
+    
+    
+    lwDF = datediff("s", sLogDateLast, sLogTime)
+    if datediff("s", sLogDateLast, sLogTime) > 1 then
+      lwJSONLogLast = ",""sLogDateLast"":""" & sLogDateLast & """"
+      lwJSONLogTime = ",""sLogTime"":""" & sLogTime & """"
+      lwJSON = "{""Data"":""" & s & """" & lwJSONLogLast & lwJSONLogTime & ",""lwDIFF"":""" & lwDF & """}"
+      
+      
+      ' 2. put to kvs
+      fv = "sk=" & at & "&type=lssn&key=" & lsSn &_
+        "&factor=" & factor &_
+        "&value= " & lwJSON
+      lwURL = "http://giip.littleworld.net/API/kvs/kvsput.asp?" & fv
+      
+      
+      lwHTTPRst = lwGetHTTP (lwURL, "GET", "", "utf-8", "text")
+      lwi = lwi + 1
+    end if
+  Loop
+end if
+
+
+'### 3. Logging last time
+if sLogTime = empty then
+  sLogTime = SetDtTostr(now(), "YYYY-MM-DD HH24:MI:SS")
+else
+  sLogTime = SetDtToStr(sLogTime, "YYYY-MM-DD HH24:MI:SS")
+end if
+lwsEvNumWrite lwPath, lwLogFileLast, sLogTime
+
+
+' 4. put to kvs end time
+factor = "NMSSN"
+lwJSON = "{""lwLogFileLast"":""" & lwLogFileLast & """,""LogTime"":""" & sLogTime & """,""LogCount"":""" & lwi & """}"
+fv = "sk=" & at & "&type=lssn&key=" & lsSn &_
+  "&factor=" & factor &_
+  "&value=" & lwJSON
+lwURL = "http://giip.littleworld.net/API/kvs/kvsput.asp?" & fv
+
+lwHTTPRst = lwGetHTTP (lwURL, "GET", "", "utf-8", "text")
+
+
+
+
+Set oWshShell = Nothing
+
+
+'### custom function
+Function lwfEvNumGet(sPath, sFileName)
+  Set lwFso = CreateObject("Scripting.FileSystemObject")
+  if lwFso.FileExists(sPath & "\" & sFileName) then
+    set lwLogFile = lwFso.opentextfile(sPath & "\" & sFileName)
+    nEvNum = lwLogFile.ReadAll
+  else
+    nEvNum = now()
+  end if
+  lwfEvNumGet = nEvNum
+End Function
+
+
+Sub lwsEvNumWrite(sPath, sFileName, sContent)
+  Set lwFso = CreateObject("Scripting.FileSystemObject")
+  if lwFso.FileExists(sPath & "\" & sFileName) then
+    lwFso.deletefile(sPath & "\" & sFileName)
+  end if
+  set lwLogFile = lwFso.createtextfile(sPath & "\" & sFileName, true)
+  
+  lwLogFile.Write sContent
+  lwLogFile.close
+End Sub
+
+
+'### Common function
+Sub lwLogFileWrite(sPath, sFileName, sContent)
+  Set lwFso = CreateObject("Scripting.FileSystemObject")
+  if lwFso.FileExists(sPath & "\" & sFileName) then
+    set lwLogFile = lwFso.opentextfile(sPath & "\" & sFileName, 8, true)
+  else
+    set lwLogFile = lwFso.createtextfile(sPath & "\" & sFileName, true)
+  end if
+  
+  
+  lwLogFile.Write sContent
+  lwLogFile.close
+End sub
+
+
+Function lwGetHTTP(url, meth, fv, output)
+  Dim xmlHttp
+  Set xmlHttp = CreateObject("MSXML2.serverXMLHTTP")
+  xmlHttp.Open meth, url, False
+      if charset = "utf-8" then
+          xmlHttp.setRequestHeader "Content-Type", "text/html; charset=utf-8"
+      else
+          xmlHttp.setRequestHeader "Content-Type", "test/html"
+      end if
+  "xmlHttp.setRequestHeader "Content-Length", "length"
+  if fv = empty then
+    xmlHttp.Send
+  else
+    xmlHttp.Send fv
+  end if
+  txtData = xmlHttp.responseText
+  htmlData = xmlHttp.responsebody
+      if output = "html" then
+          lwGetHTTP = htmlData
+      else
+          lwGetHTTP = txtData
+      end if
+  End Function
+  
+  
+  Funtion SetDtToStr(dt, date_type)
+  
+  
+      Dim mydate
+      date_type = Ucase(date_type)
+      if isdate(dt) then
+      
+      
+          hour12 = hour(dt)
+          if cint(hour12) > 12 then
+              hour12 = hour12 - 12
+          end if
+          mydate = replace (date_type, "YYYY",year(dt))
+          mydate = replace (mydate, "YY", right(year(dt), 2))
+          mydate = replace (mydate, "MM", right("0" & month(dt),2))
+          mydate = replace (mydate, "DD", right("0" & day(dt),2))
+          mydate = replace (mydate, "HH24", right("0" & hour(dt),2))
+          mydate = replace (mydate, "HH", hour12)
+          mydate = replace (mydate, "MI", right("0" & minute(dt),2))
+          mydate = replace (mydate, "SS", right("0" & second(dt),2))
+          
+      else
+      
+          mydate = "1999/01/01 00:00:00"
+          
+      end if
+      
+      
+      SetDtToStr = mydate
+      
+      
+End Function
+
+
+</script>
+</job>
